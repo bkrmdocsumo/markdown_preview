@@ -16,9 +16,9 @@ const MarkdownCleaner: React.FC = () => {
     };
 
     return (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 h-full min-h-[calc(100vh-180px)]">
+        <div className="flex flex-col gap-4 h-full min-h-[calc(100vh-180px)]">
             {/* Input Panel */}
-            <div className="flex flex-col bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+            <div className="flex flex-col bg-gray-800 rounded-lg shadow-lg overflow-hidden flex-1 min-h-0">
                 <h2 className="text-lg font-semibold p-4 bg-gray-700 border-b border-gray-600">Input Text</h2>
                 <textarea
                     value={rawText}
@@ -29,10 +29,10 @@ const MarkdownCleaner: React.FC = () => {
             </div>
 
             {/* Output Panel */}
-            <div className="flex flex-col bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+            <div className="flex flex-col bg-gray-800 rounded-lg shadow-lg overflow-hidden flex-1 min-h-0">
                 <h2 className="text-lg font-semibold p-4 bg-gray-700 border-b border-gray-600">Cleaned Preview</h2>
                 <div
-                    className="p-6 overflow-y-auto prose prose-sm prose-invert max-w-none"
+                    className="p-6 overflow-y-auto prose prose-sm prose-invert max-w-none flex-1"
                     dangerouslySetInnerHTML={{ __html: cleanedHtml }}
                 />
             </div>
