@@ -1,0 +1,5 @@
+{
+  "name": "Markdown Cleaner",
+  "description": "A tool to clean up messy markdown-like text and render a clean HTML preview. Paste your text into the input field to see the formatted output.",
+  "requestFramePermissions": []
+}
