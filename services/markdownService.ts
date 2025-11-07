@@ -1,4 +1,43 @@
 /**
+ * Renders a Markdown formatted table string into an HTML table string.
+ * @param tableBlock - A string containing a Markdown table.
+ * @returns An HTML formatted table string.
+ */
+const renderMarkdownTable = (tableBlock: string): string => {
+    const lines = tableBlock.trim().split('\n').filter(line => line.trim().startsWith('|') && line.trim().endsWith('|'));
+    if (lines.length < 2) return ''; // Needs header and separator
+
+    const headerLine = lines[0];
+    const separatorLine = lines[1];
+
+    if (!separatorLine.includes('---')) return tableBlock; // Not a valid separator
+    
+    const rows = lines.slice(2);
+
+    const headers = headerLine.split('|').map(h => h.trim()).slice(1, -1);
+    const bodyRows = rows.map(rowLine => {
+        const cells = rowLine.split('|').map(c => c.trim()).slice(1, -1);
+        while (cells.length < headers.length) {
+            cells.push('');
+        }
+        const finalCells = cells.slice(0, headers.length);
+        return `<tr>${finalCells.map(cell => `<td class="border border-gray-600 p-2">${cell}</td>`).join('')}</tr>`;
+    });
+
+    return `
+        <table class="table-auto w-full border-collapse border border-gray-600">
+            <thead>
+                <tr>${headers.map(header => `<th class="border border-gray-600 p-2">${header}</th>`).join('')}</tr>
+            </thead>
+            <tbody>
+                ${bodyRows.join('')}
+            </tbody>
+        </table>
+    `;
+};
+
+
+/**
  * Converts an HTML table string into a Markdown formatted table.
  * It handles simple tables, extracting text from `<th>` and `<td>` elements,
  * and skips complex rows containing `colspan` or `rowspan`.
@@ -68,7 +107,7 @@ export const cleanMarkdown = (rawText: string): string => {
         return "";
     }
     
-    // 1. Convert any HTML tables to Markdown format first.
+    // 1. Convert any HTML tables to Markdown format first. The 'g' flag ensures all are replaced.
     let processedText = rawText.replace(
         /<table[^>]*>[\s\S]*?<\/table>/gi, 
         (match) => htmlTableToMarkdown(match)
@@ -90,56 +129,71 @@ export const cleanMarkdown = (rawText: string): string => {
 
     const htmlBlocks = blocks.map(block => {
         const trimmedBlock = block.trim();
+        const lines = trimmedBlock.split('\n');
+        const htmlParts: string[] = [];
+        let currentTextChunk: string[] = [];
 
-        // 5. Handle Markdown Tables
-        const isTable = trimmedBlock.includes('|') && trimmedBlock.includes('---');
-        if (isTable) {
-            const lines = trimmedBlock.split('\n').filter(line => line.trim().startsWith('|') && line.trim().endsWith('|'));
-            if (lines.length > 1) { // Header and at least one separator line
-                const headerLine = lines[0];
-                const rows = lines.slice(2);
+        // Helper to process a chunk of text lines into an appropriate HTML element
+        const processTextChunk = (textLines: string[]) => {
+            if (textLines.length === 0) return;
+            const text = textLines.join('\n').trim();
+            if (!text) return;
 
-                const headers = headerLine.split('|').map(h => h.trim()).slice(1, -1);
-                const bodyRows = rows.map(rowLine => {
-                    const cells = rowLine.split('|').map(c => c.trim()).slice(1, -1);
-                     // Pad cells if row is shorter than header
-                    while (cells.length < headers.length) {
-                        cells.push('');
-                    }
-                    return `<tr>${cells.map(cell => `<td class="border border-gray-600 p-2">${cell}</td>`).join('')}</tr>`;
-                });
+            if (text.startsWith('# ')) {
+                htmlParts.push(`<h1>${text.substring(2)}</h1>`);
+            } else if (text.startsWith('## ')) {
+                htmlParts.push(`<h2>${text.substring(3)}</h2>`);
+            } else if (text.startsWith('<div') || text.startsWith('<img')) {
+                // Pass through certain HTML elements
+                htmlParts.push(text);
+            } else {
+                htmlParts.push(`<p>${text.replace(/\n/g, '<br />')}</p>`);
+            }
+        };
 
-                return `
-                    <table class="table-auto w-full border-collapse border border-gray-600">
-                        <thead>
-                            <tr>${headers.map(header => `<th class="border border-gray-600 p-2">${header}</th>`).join('')}</tr>
-                        </thead>
-                        <tbody>
-                            ${bodyRows.join('')}
-                        </tbody>
-                    </table>
-                `;
+        let i = 0;
+        while (i < lines.length) {
+            const line = lines[i];
+            const nextLine = lines[i + 1];
+
+            // Check for the start of a markdown table (header row + separator row)
+            const isTableStart =
+                line.trim().startsWith('|') && line.trim().endsWith('|') &&
+                nextLine && nextLine.includes('---') && nextLine.trim().startsWith('|') && nextLine.trim().endsWith('|');
+
+            if (isTableStart) {
+                // We've found a table. First, process any text that came before it.
+                processTextChunk(currentTextChunk);
+                currentTextChunk = []; // Reset for the next chunk of text
+
+                // Find the end of the table by looking for consecutive rows starting with '|'
+                let tableEndIndex = i + 1;
+                while (
+                    tableEndIndex + 1 < lines.length &&
+                    lines[tableEndIndex + 1].trim().startsWith('|') &&
+                    lines[tableEndIndex + 1].trim().endsWith('|')
+                ) {
+                    tableEndIndex++;
+                }
+
+                const tableLines = lines.slice(i, tableEndIndex + 1);
+                htmlParts.push(renderMarkdownTable(tableLines.join('\n')));
+
+                // Move index past the processed table
+                i = tableEndIndex + 1;
+            } else {
+                // This line is not part of a table, add it to the current text chunk
+                currentTextChunk.push(line);
+                i++;
             }
         }
 
-        // 6. Handle HTML blocks: if a block starts with a known HTML tag, leave it as is.
-        if (trimmedBlock.startsWith('<div') || trimmedBlock.startsWith('<table') || trimmedBlock.startsWith('<img')) {
-            return trimmedBlock;
-        }
+        // After the loop, process any remaining text that was not followed by a table
+        processTextChunk(currentTextChunk);
 
-        // 7. Handle Markdown-like headers
-        if (trimmedBlock.startsWith('# ')) {
-            return `<h1>${trimmedBlock.substring(2)}</h1>`;
-        }
-        if (trimmedBlock.startsWith('## ')) {
-            return `<h2>${trimmedBlock.substring(3)}</h2>`;
-        }
-
-        // 8. For all other blocks, treat them as paragraphs.
-        // Replace single newlines within the block with <br /> for line breaks.
-        return `<p>${trimmedBlock.replace(/\n/g, '<br />')}</p>`;
+        return htmlParts.join('\n');
     });
 
-    // 9. Join the processed blocks back together
+    // Join the processed blocks back together
     return htmlBlocks.join('\n');
 };
